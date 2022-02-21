@@ -54,6 +54,7 @@ let do_sort_derefs = ref false
 let do_count_phi_visits = ref false
 let do_hashcons = ref true
 let do_count_race_locations = ref false
+let do_rank_warnings = ref true
 
 type correlation = {
   corr_rhos : rhoSet;  (* pointers *)
@@ -141,6 +142,10 @@ let options = [
   "--count-race-locations",
     Arg.Set(do_count_race_locations),
     " Count how many concrete locations have a race.";
+
+  "--no-rank-warnings",
+    Arg.Clear(do_rank_warnings),
+    " Rank the warnings in descending order of importance.";
 ]
 
 module DerefH = Hashtbl.Make(
@@ -277,7 +282,6 @@ let make_guard (r: rho)
                (path: phi list)
                : guard = begin
   assert (not (RhoSet.is_empty rs));
-  (*if not (LockSet.is_empty ls) then update_rho_priority_value r (-10000);*)
   let c = {
     corr_rhos = rs;
     corr_rhos_size = RhoSet.cardinal rs;
@@ -662,7 +666,7 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
     let crs = concrete_rhoset (get_rho_p2set_m r) in
     let ls = get_protection_set r in
     if (LockSet.is_empty ls) then begin
-      ignore(E.log "Value = %d\n" (get_rho_priority_value r));
+      (*ignore(E.log "Value = %d\n" (get_rho_priority_value r));*)
       if !do_group_warnings then begin
         ignore(E.warn "Possible data race:\n unprotected locations:\n  %a\n references:\n  %a\n"
           d_rhoset crs d_rho_guards (r, phiguards));
@@ -673,7 +677,7 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
       racefound := RhoSet.union crs !racefound;
       true
     end else if (LockSet.is_empty (concrete_lockset ls)) then begin
-      ignore(E.log "Value = %d\n" (get_rho_priority_value r));
+      (*ignore(E.log "Value = %d\n" (get_rho_priority_value r));*)
       if !do_group_warnings then begin
         ignore(E.warn "Possible data race:\n locations:\n  %a protected by non-linear or concrete lock(s):\n  %a\n references:\n  %a\n"
           d_rhoset crs d_lockset ls d_rho_guards (r, phiguards));
@@ -692,13 +696,37 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
     else false (* not shared *)
   (*else ignore(E.log " It's not shared, no need to protect it\n")*)
 
-(* Finds whether a rho has acquired a lock and changes the rho_priority_value accordingly *)
+(* Finds whether a rho has acquired a lock and changes its rho_priority_value accordingly *)
 let check_locks (r: rho) (phiguards: (phi * guard) list) : unit = begin
-  let relevant = 
+
+  let rec remove_duplicates (pg: (phi * guard) list) : (phi * guard) list = begin
+      if (List.length pg) = 0 then [] else 
+      let first = List.hd pg in
+      let (_, first_guard) = first in
+
+      let (dup, rest) = 
+        List.partition 
+          (
+            fun (_, e) -> ((Corr.compare e.guard_correlation first_guard.guard_correlation) = 0) && (Cil.compareLoc e.guard_location first_guard.guard_location = 0)
+          ) 
+        pg
+      in
+    
+      let others = if (List.length rest) = 0 then [] else remove_duplicates rest in
+
+      first :: others
+  end in
+
+  let relevant_all = 
     List.filter
       (fun (_, g) -> RhoSet.mem r g.guard_correlation.corr_rhos)
       phiguards
   in
+
+  let relevant = remove_duplicates relevant_all in
+
+  ignore(E.log "%d " (List.length relevant));
+  ignore(E.log "Relevant Guards for %a = %a\n" d_rho r d_rho_guards (r, relevant));
 
   List.iter 
     (fun (_, g) -> if not (LockSet.is_empty g.guard_correlation.corr_locks) then update_rho_priority_value r (-10000)) 
@@ -720,10 +748,11 @@ let check_races () : unit = begin
   concrete_rho_iter (fun r -> check_locks r phiguards);
   let count = ref 0 in
   let all = ref 0 in
-  (* sort the rhos in descending order according to the rho_priority_value *)
-  let rho_list = List.sort (fun x y -> if get_rho_priority_value x < get_rho_priority_value y then 1 else if get_rho_priority_value x > get_rho_priority_value y then -1 else 0) ( concrete_rho_list () ) in
-  List.iter (fun r -> incr all; if check_race phiguards r then incr count) rho_list;
-  (*Labelflow.concrete_rho_iter (fun r -> incr all; if check_race phiguards r then incr count);*)
+  if !do_rank_warnings then begin
+    (* sort the rhos in descending order according to the rho_priority_value *)
+    let rho_list = List.sort (fun x y -> if get_rho_priority_value x < get_rho_priority_value y then 1 else if get_rho_priority_value x > get_rho_priority_value y then -1 else 0) ( concrete_rho_list () ) in
+    List.iter (fun r -> incr all; if check_race phiguards r then incr count) rho_list;
+  end else Labelflow.concrete_rho_iter (fun r -> incr all; if check_race phiguards r then incr count);
   if !do_count_race_locations then
     ignore(E.log "racy/total concrete locations: %d / %d\n" !count !all);
 end
