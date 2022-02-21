@@ -145,7 +145,7 @@ let options = [
 
   "--no-rank-warnings",
     Arg.Clear(do_rank_warnings),
-    " Rank the warnings in descending order of importance.";
+    " Rank the warnings in the order the variables are first mentioned.";
 ]
 
 module DerefH = Hashtbl.Make(
@@ -725,8 +725,8 @@ let check_locks (r: rho) (phiguards: (phi * guard) list) : unit = begin
 
   let relevant = remove_duplicates relevant_all in
 
-  ignore(E.log "%d " (List.length relevant));
-  ignore(E.log "Relevant Guards for %a = %a\n" d_rho r d_rho_guards (r, relevant));
+  (*ignore(E.log "%d " (List.length relevant));
+  ignore(E.log "Relevant Guards for %a = %a\n" d_rho r d_rho_guards (r, relevant));*)
 
   List.iter 
     (fun (_, g) -> if not (LockSet.is_empty g.guard_correlation.corr_locks) then update_rho_priority_value r (-10000)) 
