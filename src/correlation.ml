@@ -580,10 +580,6 @@ let fill_protection_map () : unit = begin
       RhoSet.iter
         (fun r ->
           let old = try RhoHT.find protect_map r with Not_found -> ls in
-          (* check if rho is protected by non-linear locks *)
-          if (LockSet.is_empty ls) then ()
-          else if (LockSet.is_empty (concrete_lockset ls)) then 
-            update_rho_priority_value r (-1000000000);
           RhoHT.remove protect_map r;
           RhoHT.add protect_map r (LockSet.inter old ls)
         )
@@ -666,7 +662,7 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
     let crs = concrete_rhoset (get_rho_p2set_m r) in
     let ls = get_protection_set r in
     if (LockSet.is_empty ls) then begin
-      (*ignore(E.log "Value = %d\n" (get_rho_priority_value r));*)
+      ignore(E.log "Value = %d\n" (get_rho_priority_value r));
       if !do_group_warnings then begin
         ignore(E.warn "Possible data race:\n unprotected locations:\n  %a\n references:\n  %a\n"
           d_rhoset crs d_rho_guards (r, phiguards));
@@ -677,7 +673,7 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
       racefound := RhoSet.union crs !racefound;
       true
     end else if (LockSet.is_empty (concrete_lockset ls)) then begin
-      (*ignore(E.log "Value = %d\n" (get_rho_priority_value r));*)
+      ignore(E.log "Value = %d\n" (get_rho_priority_value r));
       if !do_group_warnings then begin
         ignore(E.warn "Possible data race:\n locations:\n  %a protected by non-linear or concrete lock(s):\n  %a\n references:\n  %a\n"
           d_rhoset crs d_lockset ls d_rho_guards (r, phiguards));
@@ -696,7 +692,7 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
     else false (* not shared *)
   (*else ignore(E.log " It's not shared, no need to protect it\n")*)
 
-(* Finds whether a rho has acquired a lock and changes its rho_priority_value accordingly *)
+(* Finds whether a rho has acquired a lock or has non=linear locks and changes its rho_priority_value accordingly *)
 let check_locks (r: rho) (phiguards: (phi * guard) list) : unit = begin
 
   let rec remove_duplicates (pg: (phi * guard) list) : (phi * guard) list = begin
@@ -732,6 +728,11 @@ let check_locks (r: rho) (phiguards: (phi * guard) list) : unit = begin
     (fun (_, g) -> if not (LockSet.is_empty g.guard_correlation.corr_locks) then update_rho_priority_value r (-10000)) 
     relevant;
 
+  (* check if rho is protected by non-linear locks *)
+  let ls = get_protection_set r in
+  if (LockSet.is_empty ls) then ()
+  else if (LockSet.is_empty (concrete_lockset ls)) then 
+    update_rho_priority_value r (-1000000000);
 end
 
 let check_races () : unit = begin
