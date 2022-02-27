@@ -662,7 +662,7 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
     let crs = concrete_rhoset (get_rho_p2set_m r) in
     let ls = get_protection_set r in
     if (LockSet.is_empty ls) then begin
-      ignore(E.log "Value = %d\n" (get_rho_priority_value r));
+      (*ignore(E.log "Value = %d\n" (get_rho_priority_value r));*)
       if !do_group_warnings then begin
         ignore(E.warn "Possible data race:\n unprotected locations:\n  %a\n references:\n  %a\n"
           d_rhoset crs d_rho_guards (r, phiguards));
@@ -673,7 +673,7 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
       racefound := RhoSet.union crs !racefound;
       true
     end else if (LockSet.is_empty (concrete_lockset ls)) then begin
-      ignore(E.log "Value = %d\n" (get_rho_priority_value r));
+      (*ignore(E.log "Value = %d\n" (get_rho_priority_value r));*)
       if !do_group_warnings then begin
         ignore(E.warn "Possible data race:\n locations:\n  %a protected by non-linear or concrete lock(s):\n  %a\n references:\n  %a\n"
           d_rhoset crs d_lockset ls d_rho_guards (r, phiguards));
