@@ -692,7 +692,7 @@ let check_race (phiguards: (phi * guard) list) (r: rho) : bool =
     else false (* not shared *)
   (*else ignore(E.log " It's not shared, no need to protect it\n")*)
 
-(* Finds whether a rho has acquired a lock or has non=linear locks and changes its rho_priority_value accordingly *)
+(* Finds whether a rho has acquired a lock or has non-linear locks and changes its rho_priority_value accordingly *)
 let check_locks (r: rho) (phiguards: (phi * guard) list) : unit = begin
 
   let rec remove_duplicates (pg: (phi * guard) list) : (phi * guard) list = begin
